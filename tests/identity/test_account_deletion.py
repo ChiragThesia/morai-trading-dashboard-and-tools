@@ -11,7 +11,8 @@ app over `httpx.ASGITransport` against real Postgres, matching
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -23,13 +24,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from morai.api.models_identity import AdminCreateUserResponse
 from morai.crypto.envelope import unwrap_dek
-from morai.db.models import Event, Fill, Leg, Position, SchwabConnection
+from morai.db.models import (
+    Event,
+    Fill,
+    Leg,
+    Position,
+    ReconciliationRun,
+    SchwabConnection,
+    SnapshotMark,
+    SnapshotObservation,
+    SnapshotRun,
+)
 from morai.db.models import Session as SessionRow
 from morai.db.models import SetupToken, User, UserDataKey
 from morai.identity.account import delete_account
 from morai.identity.setup_tokens import TokenPurpose, issue_token
 from morai.identity.tokens import generate_token, hash_token
+from morai.ingest.reconciliation_runs import record_reconciliation_run
+from morai.ingest.snapshot_runs import (
+    SnapshotRunStatus,
+    SnapshotTrigger,
+    record_snapshot_run,
+)
+from morai.ingest.snapshots import (
+    SnapshotWrite,
+    write_snapshot_marks,
+    write_snapshot_observations,
+)
 from morai.ledger.fills import FillWrite, insert_fills
+from morai.ledger.reconciliation import (
+    ReconciliationResult,
+    ReconciliationVerdict,
+    window_bounds,
+)
 from morai.settings import get_settings
 from morai.vendor.connections import upsert_connection
 from morai.vendor.protocol import ExchangedToken
@@ -57,6 +84,10 @@ _CREATE_RESPONSE: TypeAdapter[AdminCreateUserResponse] = TypeAdapter(
 )
 
 _EXECUTION_TIME = datetime(2026, 6, 18, 14, 30, tzinfo=UTC)
+# 14:30 UTC on a June weekday is 10:30 America/New_York -- a real RTH slot
+# boundary, so `slot_time` is a value the capture path could itself produce.
+_SLOT_TIME = datetime(2026, 6, 18, 14, 30, tzinfo=UTC)
+_TRADING_DAY = date(2026, 6, 18)
 
 
 async def _seed_session(superuser_db_session: AsyncSession, user_id: UUID) -> str:
@@ -389,3 +420,97 @@ async def test_deleting_ones_own_account_does_not_touch_another_users(
 
     still_there = await client.get("/me", cookies={"morai_session": token_b})
     assert still_there.status_code == 200
+
+
+async def test_deleting_an_account_with_snapshot_and_reconciliation_rows(
+    superuser_db_session: AsyncSession,
+    provisioned_users: SeededUsers,
+    seeded_position: SeededPosition,
+) -> None:
+    """Phases 8 and 9 added four more tables carrying an uncascaded
+    `user_id -> users.id` foreign key -- `snapshot_observations` and
+    `snapshot_marks` (both also uncascaded to `legs.id`), `snapshot_runs`
+    and `reconciliation_runs`. Same shape as the Phase 4 case above:
+    without a delete for each, the whole transaction fails on those
+    constraints the moment a user has ever had a snapshot captured or a
+    window reconciled, so `DELETE /me` deletes nothing at all -- the data
+    key included.
+
+    `reconciliation_runs` raises the stakes past an orphan row. Migration
+    0016 stores its four money columns as plaintext `Numeric`, on purpose
+    (`D9-13`, `D9-15`), so step 1's crypto-shred does not reach them.
+    Deleting the row is the only thing that removes that user's realised
+    P&L from the database.
+    """
+    await superuser_db_session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(provisioned_users.user_a)},
+    )
+    snapshot_write = SnapshotWrite(
+        leg_id=seeded_position.front_leg_id,
+        slot_time=_SLOT_TIME,
+        observed_at=_SLOT_TIME,
+        raw_payload={"mark": "1.2500"},
+        mark_usd=Decimal("1.2500"),
+        spot_usd=Decimal("6050.0000"),
+        gap_reason=None,
+    )
+    assert (
+        await write_snapshot_observations(
+            superuser_db_session, provisioned_users.user_a, [snapshot_write]
+        )
+        == 1
+    )
+    assert (
+        await write_snapshot_marks(
+            superuser_db_session, provisioned_users.user_a, [snapshot_write]
+        )
+        == 1
+    )
+    await record_snapshot_run(
+        superuser_db_session,
+        provisioned_users.user_a,
+        slot_time=_SLOT_TIME,
+        started_at=_SLOT_TIME,
+        finished_at=_SLOT_TIME,
+        trigger=SnapshotTrigger.SCHEDULED,
+        status=SnapshotRunStatus.SUCCEEDED,
+        legs_attempted=1,
+        marks_written=1,
+        gaps_by_reason=None,
+        error_code=None,
+    )
+    window_start, window_end = window_bounds(_TRADING_DAY)
+    await record_reconciliation_run(
+        superuser_db_session,
+        provisioned_users.user_a,
+        result=ReconciliationResult(
+            trading_day=_TRADING_DAY,
+            window_start=window_start,
+            window_end=window_end,
+            realised_pnl_usd=Decimal("125.5000"),
+            commissions_usd=Decimal("2.6000"),
+            cash_delta_usd=Decimal("125.5000"),
+            signed_difference_usd=Decimal("0.0000"),
+            verdict=ReconciliationVerdict.PASSED,
+            reason=None,
+        ),
+        checked_at=_SLOT_TIME,
+        is_reopening=False,
+    )
+    await superuser_db_session.commit()
+
+    await delete_account(superuser_db_session, provisioned_users.user_a)
+    await superuser_db_session.commit()
+
+    for model in (SnapshotObservation, SnapshotMark, SnapshotRun, ReconciliationRun):
+        assert (
+            await superuser_db_session.execute(
+                select(model).where(model.user_id == provisioned_users.user_a)
+            )
+        ).all() == [], f"{model.__name__} still holds a deleted user's rows"
+    assert (
+        await superuser_db_session.execute(
+            select(User).where(User.id == provisioned_users.user_a)
+        )
+    ).scalar_one_or_none() is None
