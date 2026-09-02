@@ -257,6 +257,34 @@ def _indeterminate(
     )
 
 
+def _event_contribution(event: EventRecord) -> Decimal:
+    """One event's own signed contribution to the window's realised P&L --
+    the one seam every event's money routes through when `reconcile_window`
+    sums them (`D9-05`'s arithmetic), mirroring `pairing.py`'s own
+    `_signed_leg_amount` seam exactly: an OPEN contributes minus its
+    `open_debit_usd`, a CLOSE contributes its `close_credit_usd`, a ROLL
+    contributes the difference. `tests/ledger/test_reconciliation.py`'s own
+    seeded-fault case patches this one function to prove the comparison has
+    teeth (`D9-07`, `T-09-07`), the same convention `tests/ledger/
+    test_pairing_seeded_faults.py` already established for the oracle.
+
+    Callers only reach this after `reconcile_window`'s own indeterminate-
+    cause walk has already proven the needed field is not `None`, and a
+    SETTLEMENT is filtered out of `window_events` before this is ever
+    called on one -- the `assert`s below document that precondition
+    rather than enforce a fallback a caller needs."""
+    if event.event_type == "OPEN":
+        assert event.open_debit_usd is not None  # checked by caller
+        return -event.open_debit_usd
+    if event.event_type == "CLOSE":
+        assert event.close_credit_usd is not None  # checked by caller
+        return event.close_credit_usd
+    assert event.event_type == "ROLL"
+    assert event.open_debit_usd is not None  # checked by caller
+    assert event.close_credit_usd is not None  # checked by caller
+    return event.close_credit_usd - event.open_debit_usd
+
+
 def reconcile_window(
     events: Sequence[EventRecord],
     broker_cash: Sequence[BrokerCashRecord],
@@ -388,16 +416,7 @@ def reconcile_window(
 
     realised_pnl_usd = Decimal("0")
     for event in window_events:
-        if event.event_type == "OPEN":
-            assert event.open_debit_usd is not None  # checked above
-            realised_pnl_usd -= event.open_debit_usd
-        elif event.event_type == "CLOSE":
-            assert event.close_credit_usd is not None  # checked above
-            realised_pnl_usd += event.close_credit_usd
-        elif event.event_type == "ROLL":
-            assert event.open_debit_usd is not None  # checked above
-            assert event.close_credit_usd is not None  # checked above
-            realised_pnl_usd += event.close_credit_usd - event.open_debit_usd
+        realised_pnl_usd += _event_contribution(event)
 
     commissions_usd = Decimal("0")
     cash_delta_usd = Decimal("0")
