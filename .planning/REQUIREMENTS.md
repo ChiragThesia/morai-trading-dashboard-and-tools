@@ -25,10 +25,10 @@ API, a job, or a stored invariant.
 ### Encryption
 
 - [ ] **CRYPT-01**: Each user gets a data key at account creation, wrapped by a master key held outside the database
-- [ ] **CRYPT-02**: Prices, quantities, P&L, and free-text entry fields are stored encrypted under that user's key
+- [ ] **CRYPT-02**: Per-user trade detail — prices, quantities, per-trade P&L, and free-text entry fields — is stored encrypted under that user's key. The four `reconciliation_runs` aggregates (`realised_pnl_usd`, `commissions_usd`, `cash_delta_usd`, `signed_difference_usd`) are deliberately plaintext, so the status endpoint reports drift without unwrapping a key (`D9-13`, `D9-15`). Owner ruling, 2026-09-02.
 - [ ] **CRYPT-03**: The plaintext column set is explicit and documented with the reason each column must stay readable
 - [ ] **CRYPT-04**: The master key can be rotated without re-encrypting any user's trade data
-- [ ] **CRYPT-05**: A database dump taken without the master key yields no readable price, quantity, or P&L
+- [ ] **CRYPT-05**: A database dump taken without the master key yields no readable price, quantity, or per-trade P&L. The four `reconciliation_runs` aggregates are the named exception (`D9-13`, `D9-15`); the allow-list holding that line is `tests/test_pg_dump_confidentiality.py::test_only_the_reconciliation_aggregates_store_plaintext_money`, and any other plaintext money column fails it.
 
 ### Schwab connection
 

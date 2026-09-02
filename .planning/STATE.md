@@ -163,6 +163,30 @@ nothing red, all seven marked "code complete."
 **No phase's `status: human_needed` was rewritten.** Every live-infrastructure item below remains
 open; a local pass proves nothing about a deployed container.
 
+### RESOLVED 2026-09-02 — Phase 3 criterion 1 vs. Phase 9 `D9-13`/`D9-15`
+
+**The owner ruled: narrow criterion 1, and enforce the new line mechanically.** The four columns
+stay plaintext. `/reconciliation/status` is untouched. `D9-13`/`D9-15` stand.
+
+Restated in `ROADMAP.md` (criterion 1), `REQUIREMENTS.md` (`CRYPT-02`, `CRYPT-05`), `PROJECT.md`
+(the encryption success criterion) and `03-VERIFICATION.md` (criterion 1 row, `CRYPT-02`/`CRYPT-05`
+rows, and a dated section). Each says the same true thing: per-user trade detail is unreadable
+without the master key; the four `reconciliation_runs` aggregates are the named plaintext
+exception.
+
+The line is executable, not just written.
+`tests/test_pg_dump_confidentiality.py::test_only_the_reconciliation_aggregates_store_plaintext_money`
+derives every plaintext money column from `pg_attribute` and compares it to a four-entry
+allow-list. A fifth fails on the migration that adds it. The same file's dump widened from five
+named tables to the whole database, and its read-back from four named ciphertext columns to every
+one the catalog reports. `test_key_rotation.py`'s byte-identical capture widened the same way,
+from `fills`/`events` to all six ciphertext-bearing tables. All three carry a vacuity guard, the
+shape PR #34 established.
+
+`03-VERIFICATION.md` keeps `status: human_needed`. Both live-infrastructure items stay open.
+
+The original entry, for the record:
+
 ### OPEN DECISION — Phase 3 criterion 1 vs. Phase 9 `D9-13`/`D9-15`
 
 Measured, not inferred, during the sweep. Migration 0016 stores `realised_pnl_usd`,
@@ -177,6 +201,8 @@ the verifying agent, which correctly declined to re-litigate another phase's dec
 Related coverage gap, not a live defect: `test_pg_dump_confidentiality.py` still dumps only
 `users`/`positions`/`fills`/`events`/`user_data_keys`, and `test_key_rotation.py`'s byte-identical
 capture still covers only `fills`/`events`. Both are narrower than the schema they now describe.
+
+Both gaps closed by the ruling above.
 
 ### UNOWNED WORK — surfaced by the sweep, assigned to no phase
 

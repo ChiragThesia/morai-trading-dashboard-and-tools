@@ -1,6 +1,24 @@
 """Criterion 1a (CRYPT-05): a real `pg_dump`, restored into a scratch
 database by a process with no master key in its environment, yields no
-readable price, quantity, P&L or free-text field.
+readable per-user trade detail -- price, quantity, per-trade P&L or
+free-text field.
+
+## The one exception, and why this module now enforces it
+
+`reconciliation_runs`' four aggregates (`realised_pnl_usd`,
+`commissions_usd`, `cash_delta_usd`, `signed_difference_usd`) are plaintext
+`NUMERIC(14,4)` on purpose. `D9-13` requires the stored row to answer "how
+far off, and in which direction" on its own, and `D9-15` requires
+`GET /reconciliation/status` to be cheap enough to poll before rendering --
+neither survives a data-key unwrap. Migration 0016 says so in its own
+docstring.
+
+A real `pg_dump` of a seeded row, no master key involved, confirmed the
+readable P&L on 2026-09-02. The owner narrowed criterion 1 rather than
+encrypting the columns. `_ALLOWED_PLAINTEXT_MONEY_COLUMNS` below is that
+line, made executable: exactly those four columns, and
+`test_only_the_reconciliation_aggregates_store_plaintext_money` fails on
+any fifth.
 
 03-RESEARCH.md Pitfall 1, verified live in that research session and
 reproduced here as a named negative control: `pg_dump`'s plain-format dump
@@ -104,6 +122,26 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 _PG_BIN_DIR = Path("/opt/homebrew/opt/postgresql@18/bin")
 
 _BYTES: TypeAdapter[bytes] = TypeAdapter(bytes)
+_STR: TypeAdapter[str] = TypeAdapter(str)
+
+# The one deliberate hole in criterion 1, ruled on by the owner 2026-09-02.
+# `reconciliation_runs` stores its four aggregates as plaintext
+# `NUMERIC(14,4)` so `GET /reconciliation/status` answers "how far off, in
+# which direction" without unwrapping a data key (`D9-13`, `D9-15`, migration
+# 0016's own docstring). Nothing else may.
+#
+# An allow-list, never a deny-list: a money column a later migration adds
+# fails `test_only_the_reconciliation_aggregates_store_plaintext_money`
+# on its first run, and the author has to either encrypt it or come here and
+# argue for it.
+_ALLOWED_PLAINTEXT_MONEY_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("reconciliation_runs", "realised_pnl_usd"),
+        ("reconciliation_runs", "commissions_usd"),
+        ("reconciliation_runs", "cash_delta_usd"),
+        ("reconciliation_runs", "signed_difference_usd"),
+    }
+)
 
 _EXECUTION_TIME_1 = datetime(2026, 6, 18, 14, 30, tzinfo=UTC)
 _EXECUTION_TIME_2 = datetime(2026, 6, 18, 14, 31, tzinfo=UTC)
@@ -135,6 +173,106 @@ def _resolve_pg_binary(name: str) -> str:
         f"{name} not found at {_PG_BIN_DIR} or on PATH. Expected Postgres 18 "
         "client binaries at /opt/homebrew/opt/postgresql@18/bin (this "
         "plan's own <environment> block)."
+    )
+
+
+async def _public_base_tables(session: AsyncSession) -> list[str]:
+    """Every `public` base table, read from the catalog rather than written
+    down. Follows PR #34's fix to `tests/test_isolation.py`, which replaced
+    that suite's hand-written five-table list with a `pg_attribute`
+    derivation for exactly this reason: by Phase 9 the schema had grown six
+    user-scoped tables no hand-written list named."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.relname FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE n.nspname = 'public' AND c.relkind = 'r' "
+                "ORDER BY c.relname"
+            )
+        )
+    ).all()
+    return [_STR.validate_python(row[0]) for row in rows]
+
+
+async def _plaintext_money_columns(session: AsyncSession) -> set[tuple[str, str]]:
+    """Every `public` base-table column that stores money in the clear.
+
+    Money in this schema is `NUMERIC` and carries a `usd` in its name
+    (`NN-8`, enforced by `tests/test_money_column_naming.py`). Ciphertext and
+    nonce columns are `bytea` and carry `usd` only inside a longer name, so
+    excluding `bytea` separates encrypted money from plaintext money with no
+    column list to keep in sync.
+
+    The ceiling: a future migration could store money as `text` under a name
+    with no `usd` in it, and this derivation would miss it. `NN-8` and
+    `tests/test_money_column_naming.py` are what make that shape a violation
+    before it reaches the database."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.relname, a.attname FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "JOIN pg_attribute a ON a.attrelid = c.oid "
+                "WHERE n.nspname = 'public' AND c.relkind = 'r' "
+                "AND a.attnum > 0 AND NOT a.attisdropped "
+                "AND format_type(a.atttypid, a.atttypmod) <> 'bytea' "
+                "AND (format_type(a.atttypid, a.atttypmod) LIKE 'numeric%' "
+                "OR a.attname ~ 'usd') "
+                "ORDER BY c.relname, a.attname"
+            )
+        )
+    ).all()
+    return {
+        (_STR.validate_python(row[0]), _STR.validate_python(row[1])) for row in rows
+    }
+
+
+async def _ciphertext_columns(session: AsyncSession) -> list[tuple[str, str]]:
+    """Every `public` base-table ciphertext column. Derived, not listed --
+    the hardcoded `fills`/`events` pair this replaced named two of the six
+    tables that now carry ciphertext."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.relname, a.attname FROM pg_class c "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "JOIN pg_attribute a ON a.attrelid = c.oid "
+                "WHERE n.nspname = 'public' AND c.relkind = 'r' "
+                "AND a.attnum > 0 AND NOT a.attisdropped "
+                "AND a.attname ~ '_ciphertext$' "
+                "ORDER BY c.relname, a.attname"
+            )
+        )
+    ).all()
+    return [
+        (_STR.validate_python(row[0]), _STR.validate_python(row[1])) for row in rows
+    ]
+
+
+async def test_only_the_reconciliation_aggregates_store_plaintext_money(
+    app_db_session: AsyncSession,
+) -> None:
+    """Criterion 1's real boundary, made executable.
+
+    Criterion 1 used to claim a stolen dump yields no readable P&L, flat.
+    Migration 0016 made that false on purpose: `reconciliation_runs` stores
+    four aggregates as plaintext `NUMERIC(14,4)` so the status endpoint can
+    report drift without unwrapping a data key (`D9-13`, `D9-15`). A real
+    `pg_dump` of a seeded row proved it, 2026-09-02.
+
+    The owner narrowed the criterion rather than encrypting the columns. This
+    test is what keeps the narrowed line honest: the allow-list holds exactly
+    those four columns, and any other plaintext money column fails here on the
+    migration that adds it."""
+    tables = await _public_base_tables(app_db_session)
+    # Guards the guard. An empty catalog read would make the comparison below
+    # a claim about nothing. 21 is the count at Phase 9 -- `>=` never needs
+    # bumping when a table lands, and a drop below it is itself a signal.
+    assert len(tables) >= 21
+
+    assert await _plaintext_money_columns(app_db_session) == (
+        _ALLOWED_PLAINTEXT_MONEY_COLUMNS
     )
 
 
@@ -277,6 +415,14 @@ async def test_real_dump_restored_without_master_key_yields_no_readable_bytes(
     assert live_db is not None
     pg_env = {"PATH": os.environ.get("PATH", ""), "PGPASSWORD": password}
 
+    # The whole database, not a `-t` list. The five-table list this replaced
+    # named five of the twenty-one tables the schema now has -- a leak into
+    # any of the other sixteen was simply outside the bytes this test reads.
+    # A `-t` list rebuilt from the catalog would still be wrong: `-t` omits
+    # the enum types the procrastinate tables declare, and the restore fails.
+    ciphertext_columns = await _ciphertext_columns(app_db_session)
+    assert len(ciphertext_columns) >= 10
+
     dump_path = tmp_path / "confidentiality.sql"
     dump_result = await _run(
         [
@@ -288,16 +434,6 @@ async def test_real_dump_restored_without_master_key_yields_no_readable_bytes(
             "-U",
             user,
             "--format=plain",
-            "-t",
-            "users",
-            "-t",
-            "positions",
-            "-t",
-            "fills",
-            "-t",
-            "events",
-            "-t",
-            "user_data_keys",
             "-f",
             str(dump_path),
             live_db,
@@ -306,6 +442,15 @@ async def test_real_dump_restored_without_master_key_yields_no_readable_bytes(
     )
     assert dump_result.returncode == 0, dump_result.stderr
     dump_text = dump_path.read_text(errors="replace")
+
+    # Guards the guard, against the catalog rather than a count: every table
+    # Postgres reports must appear in the dump this test then greps. A
+    # narrowed dump makes every assertion below a claim about less than it
+    # says. 21 is the count at Phase 9; `>=` never needs bumping.
+    tables = await _public_base_tables(app_db_session)
+    assert len(tables) >= 21
+    for table in tables:
+        assert f"CREATE TABLE public.{table} " in dump_text
 
     scratch_db = f"morai_scratch_confidentiality_{uuid.uuid4().hex[:12]}"
     try:
@@ -360,48 +505,32 @@ async def test_real_dump_restored_without_master_key_yields_no_readable_bytes(
         scratch_dsn = url.set(
             drivername="postgresql+asyncpg", database=scratch_db
         ).render_as_string(hide_password=False)
+        all_ciphertext_bytes: list[bytes] = []
         scratch_engine = create_async_engine(scratch_dsn)
         try:
             async with scratch_engine.connect() as scratch_conn:
-                fill_rows = (
-                    await scratch_conn.execute(
-                        text(
-                            "SELECT quantity_ciphertext, price_usd_ciphertext "
-                            "FROM fills WHERE order_id != 'free-text-marker'"
+                for table, column in ciphertext_columns:
+                    # Both identifiers came out of the catalog above, never
+                    # out of a test parameter -- but interpolating an
+                    # identifier at all earns the check.
+                    assert table.isidentifier() and column.isidentifier()
+                    rows = (
+                        await scratch_conn.execute(
+                            text(f"SELECT {column} FROM {table}")
                         )
+                    ).all()
+                    all_ciphertext_bytes.extend(
+                        _BYTES.validate_python(row[0])
+                        for row in rows
+                        if row[0] is not None
                     )
-                ).all()
-                event_rows = (
-                    await scratch_conn.execute(
-                        text(
-                            "SELECT open_debit_usd_ciphertext, "
-                            "close_credit_usd_ciphertext FROM events"
-                        )
-                    )
-                ).all()
-                marker_rows = (
-                    await scratch_conn.execute(
-                        text(
-                            "SELECT quantity_ciphertext FROM fills "
-                            "WHERE order_id = 'free-text-marker'"
-                        )
-                    )
-                ).all()
         finally:
             await scratch_engine.dispose()
 
-        assert len(fill_rows) == 2
-        assert len(event_rows) == 1
-        assert len(marker_rows) == 1
-
-        all_ciphertext_bytes: list[bytes] = []
-        for row in fill_rows:
-            all_ciphertext_bytes.append(_BYTES.validate_python(row[0]))
-            all_ciphertext_bytes.append(_BYTES.validate_python(row[1]))
-        for row in event_rows:
-            all_ciphertext_bytes.append(_BYTES.validate_python(row[0]))
-            all_ciphertext_bytes.append(_BYTES.validate_python(row[1]))
-        marker_ciphertext = _BYTES.validate_python(marker_rows[0][0])
+        # Guards the guard: two fills x two columns, one event x two, plus the
+        # free-text marker's one. An empty read would make every assertion
+        # below pass while proving nothing.
+        assert len(all_ciphertext_bytes) >= 7
 
         # Primary assertion -- this is the arm that can actually fail on a
         # real leak: real Python bytes read back through a real AsyncEngine,
@@ -419,7 +548,8 @@ async def test_real_dump_restored_without_master_key_yields_no_readable_bytes(
                     f"{plaintext!r} found inside a stored ciphertext value -- "
                     "encryption failed to protect this field."
                 )
-        assert _FREE_TEXT_MARKER not in marker_ciphertext
+        for ciphertext in all_ciphertext_bytes:
+            assert _FREE_TEXT_MARKER not in ciphertext
 
         # Secondary, independent arm -- the plaintext's HEX encoding must
         # also be absent from the dump text itself (the correction to the
