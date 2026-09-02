@@ -92,6 +92,35 @@ Root-caused by reading `worker/app.py` and the test fixture: Phase 1's own heart
 
 This is a test-isolation gap (an unrelated periodic task sharing the same app instance and the same monkeypatched auth seam), not a defect in Phase 8's own production code — confirmed independently three ways: (1) direct code reading shows `capture_user_snapshot`'s connection-health branch runs entirely before any vendor call; (2) the test passes reliably (8/9+ observed runs) in isolation and as part of the full, ordered test file; (3) `uv run pytest -q` (full suite) and `bash tools/gate.sh` — the actual gating commands — both passed cleanly, twice each, across separate invocations in this verification session. It fails in the safe direction (false test failure, not a false pass), and it was only reproducible under repeated, narrow, back-to-back `-k`-filtered invocations that this verifier ran deliberately to stress the test's isolation — not under the project's own gating command. Recorded here for the record since a future CI run could hit it by coincidence; not treated as a gap against any of the five success criteria, all of which were independently confirmed true through direct code reading, live database queries, and a reproduced positive control.
 
+#### Amendment, 2026-09-02 — the flake above is fixed
+
+Re-verification reproduced it (2 failures in 21 narrow runs, including the first
+standalone run) and fixed it. The note above is right about the mechanism and slightly
+wrong about the trigger: the deferrer does not need a wall-clock minute boundary. It
+fires on its **first pass** — `PeriodicDeferrer.get_timestamps`, given no prior defer,
+yields the *previous* cron tick whenever that tick is inside `MAX_DELAY` (600s), which
+for a `* * * * *` cron it always is. Across runs only `procrastinate_periodic_defers`'
+unique constraint suppresses the repeat, so the first worker-driving test in each
+wall-clock minute fires the fan-out and the rest do not — which is what made it look
+boundary-triggered and made it intermittent rather than constant.
+
+Fixed at the deferrer, not per test: `tests/conftest.py::no_periodic_deferrer` is an
+autouse fixture that monkeypatches `procrastinate.periodic.PeriodicDeferrer.worker` to
+return immediately. Eight test files drive a real worker and all were exposed, so one
+fixture is a smaller diff than eight guards. The periodic *registrations* are left
+intact deliberately — two tests assert on them and must keep reading the live registry
+— and returning immediately is the vendor's own no-op path for an empty registry, which
+the worker's side-task monitor already treats as normal. **No production code changed.**
+
+Guarded by `tests/test_worker_heartbeat.py::test_the_suite_neutralises_procrastinates_periodic_deferrer`,
+which is deterministic in both directions: before the fixture existed it failed with
+`procrastinate.exceptions.AppNotOpen` raised from inside `deferrer.worker()` — the
+deferrer genuinely reaching the connector to defer a job — and passes with
+`deferrer.last_defers == {}` after.
+
+Proof: `test_expired_connection_writes_gap` alone, 2 failures / 21 runs before,
+**0 failures / 40 runs after**. `bash tools/gate.sh`: 660 passed, exit 0.
+
 ### Human Verification Required
 
 Both items below are the same two the phase's own `08-VALIDATION.md` names in its "Manual-Only Verifications" table, and could not be closed by this verifier for the reasons stated — consistent with the project's own workflow rule ("when you cannot verify something, say so explicitly rather than softening the claim").
@@ -112,7 +141,32 @@ None against the phase's five roadmap success criteria — all five were indepen
 
 Status is `human_needed` rather than `passed` solely because two Manual-Only items named in the phase's own `08-VALIDATION.md` — a live Schwab `get_quotes` schema check and a real Railway worker-outage observation — remain genuinely unverifiable in this local environment and were not closed here on inference, per this project's own verification discipline.
 
+## Re-verification, 2026-09-02
+
+All five criteria re-checked against current code, independently of the original run.
+Phase 8's source is byte-unchanged since its own fix commits — `git log` on
+`snapshots.py`, `snapshot_repair.py`, `snapshot_runs.py`, `tools/repair_snapshots.py`
+and `alembic/versions/0015_snapshot_capture.py` shows no commit after `b52edb1`, so
+Phase 9 did not disturb it and the original evidence still describes the live code.
+
+| # | Re-verified by | Result |
+|---|---|---|
+| 1 | Fed the production cron's own UTC ticks (`0,30 * * * *`, 48/day) through `rth_slot_for` for four days spanning both DST states and both transition days | Exactly 14 Eastern slots accepted per weekday (09:30–16:00), both transition days included; weekend, pre-open, post-close, off-grid and stray-second inputs all rejected; `rth_slots_between` agreed with `rth_slot_for` on all 70 slots of the spring-forward week |
+| 2 | Evaluated `snapshot_marks_gap_xor_mark_check`'s own expression (verbatim from `pg_get_constraintdef`) over real column values, plus 25 hostile inputs through `parse_quote_payload` | A gap carrying a mark, a gap carrying only a spot, a no-gap/no-mark row and a mark with no `key_version` are all rejected; honest gap and real mark (with or without spot) accepted. Parser: 0 raises, 0 mark-XOR-gap violations, bare `NaN`/`Infinity`/`-Infinity` from `json.loads` all degrade to `no_market_data` |
+| 3 | Read the `where=` clause on both writers | `(excluded.gap_reason IS NULL) OR (existing.gap_reason IS NOT NULL)` intact on `write_snapshot_observations` and `write_snapshot_marks` — heals a gap, permits a corrective real-over-real backfill, blocks gap-over-real |
+| 4 | Invoked the CLI; re-read both functions and the import list | `--help` exit 0 exposing both entry points (`repair_snapshot_marks` and `--backfill-gaps`); invalid UUID rejected exit 2 without echoing it. No `morai.vendor`/`schwab` import. `backfill_uncaptured_slot_gaps` writes `slot_not_captured` only; `missing_capture_slots` is pure and shares the writer's `rth_slots_between` grid |
+| 5 | Read `capture_user_snapshot`'s ordering; re-ran the test 40× | The `connection is None or health is EXPIRED` branch writes its gaps and returns before `schwab_client_for_user` is entered, so no client is constructed. Test now stable — see the amendment above |
+
+`bash tools/gate.sh`: **660 passed, exit 0** (ruff, ruff format, basedpyright strict,
+mypy strict, pytest — `set -euo pipefail`, so exit 0 means all five stages passed).
+
+**Status stays `human_needed`.** Neither Manual-Only item was closed: no live Schwab
+connection and no deployed worker exist on this machine, so the `get_quotes` OPTION
+response schema and the real `MAX_DELAY` worker-outage trigger remain unverified. They
+are not inferred closed here.
+
 ---
 
 _Verified: 2026-09-02T00:26:36Z_
 _Verifier: Claude (gsd-verifier)_
+_Re-verified: 2026-09-02 — 5/5 criteria re-checked, flake fixed, both Manual-Only items still open_
